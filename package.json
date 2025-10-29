@@ -1,0 +1,28 @@
+{
+  "name": "my-bio-links",
+  "version": "1.0.0",
+  "description": "A static link-in-bio page builder",
+  "author": "Doug Finnie <https://github.com/dougfinnie>",
+  "scripts": {
+    "build": "node build.js example",
+    "build:custom": "node build.js",
+    "serve": "npx serve dist",
+    "dev": "npm run build && npm run serve",
+    "lint": "eslint .",
+    "lint:fix": "eslint . --fix",
+    "format": "prettier --write .",
+    "format:check": "prettier --check .",
+    "check": "npm run lint && npm run format:check"
+  },
+  "dependencies": {
+    "qrcode": "^1.5.3"
+  },
+  "devDependencies": {
+    "@eslint/js": "^9.38.0",
+    "eslint": "^9.38.0",
+    "eslint-config-prettier": "^10.1.8",
+    "eslint-plugin-prettier": "^5.5.4",
+    "prettier": "^3.6.2"
+  },
+  "license": "CC-BY-NC-4.0"
+}

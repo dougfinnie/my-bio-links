@@ -1,0 +1,70 @@
+{
+  "profile": {
+    "name": "Your Name",
+    "bio": "Your bio description here",
+    "avatar": "assets/images/avatar.svg",
+    "background": {
+      "type": "color",
+      "value": "#ffffff"
+    },
+    "theme": {
+      "backgroundColor": "#ffffff",
+      "buttonColor": "rgba(255, 255, 255, 0.1)",
+      "buttonHoverColor": "rgba(255, 255, 255, 0.2)",
+      "buttonBorder": "1px solid rgba(255, 255, 255, 0.4)",
+      "textColor": "#0A0B0D",
+      "fontFamily": "'Poppins', sans-serif"
+    }
+  },
+  "siteUrl": "https://your-site.netlify.app",
+  "links": [
+    {
+      "title": "My Website",
+      "url": "https://your-website.com",
+      "icon": "fas fa-globe",
+      "image": "assets/link-images/link-image-placeholder.png"
+    },
+    {
+      "title": "Newsletter",
+      "url": "https://your-newsletter.com",
+      "icon": "fas fa-envelope-open-text",
+      "image": "assets/link-images/link-image-placeholder.png"
+    },
+    {
+      "title": "Shop",
+      "url": "https://your-shop.com",
+      "icon": "fas fa-store",
+      "image": "assets/link-images/link-image-placeholder.png"
+    },
+    {
+      "title": "Instagram",
+      "url": "https://instagram.com/yourusername",
+      "icon": "fab fa-instagram",
+      "image": ""
+    },
+    {
+      "title": "Twitter",
+      "url": "https://twitter.com/yourusername",
+      "icon": "fab fa-twitter",
+      "image": ""
+    },
+    {
+      "title": "Facebook",
+      "url": "https://facebook.com/yourpage",
+      "icon": "fab fa-facebook",
+      "image": ""
+    },
+    {
+      "title": "YouTube",
+      "url": "https://youtube.com/yourchannel",
+      "icon": "fab fa-youtube",
+      "image": ""
+    },
+    {
+      "title": "Email Me",
+      "url": "mailto:your-email@example.com",
+      "icon": "fas fa-envelope",
+      "image": ""
+    }
+  ]
+}
