@@ -1,6 +1,7 @@
 const fs = require('fs');
 const path = require('path');
 const QRCode = require('qrcode');
+const { URL } = require('url');
 
 // Get config name from command line argument
 const configName = process.argv[2];
@@ -51,6 +52,69 @@ const config = JSON.parse(fs.readFileSync(configFilePath, 'utf8'));
 
 console.log(`Building with config folder: ${configPath}`);
 
+function escapeHtml(value) {
+  return String(value).replace(/[&<>"']/g, ch => {
+    switch (ch) {
+      case '&':
+        return '&amp;';
+      case '<':
+        return '&lt;';
+      case '>':
+        return '&gt;';
+      case '"':
+        return '&quot;';
+      case "'":
+        return '&#39;';
+      default:
+        return ch;
+    }
+  });
+}
+
+function sanitizeIconClass(value) {
+  return String(value)
+    .split(/\s+/)
+    .filter(Boolean)
+    .filter(part => /^[A-Za-z0-9_-]+$/.test(part))
+    .join(' ');
+}
+
+function sanitizeHref(rawUrl) {
+  const url = String(rawUrl || '').trim();
+  if (!url) {
+    throw new Error('Empty link url');
+  }
+
+  // Allow relative URLs
+  if (
+    url.startsWith('/') ||
+    url.startsWith('./') ||
+    url.startsWith('../') ||
+    url.startsWith('#')
+  ) {
+    return url;
+  }
+
+  let parsed;
+  try {
+    parsed = new URL(url);
+  } catch {
+    throw new Error(`Invalid URL: ${url}`);
+  }
+
+  const allowed = new Set(['http:', 'https:', 'mailto:', 'tel:']);
+  if (!allowed.has(parsed.protocol)) {
+    throw new Error(`Disallowed URL scheme: ${parsed.protocol}`);
+  }
+
+  return url;
+}
+
+function isMailOrTel(rawUrl) {
+  const url = String(rawUrl || '').trim().toLowerCase();
+  return url.startsWith('mailto:') || url.startsWith('tel:');
+}
+
 // Read template
 let template = fs.readFileSync('template.html', 'utf8');
 
@@ -58,21 +122,28 @@ let template = fs.readFileSync('template.html', 'utf8');
 const linksHtml = config.links
   .map(link => {
     const hasImage = link.image && link.image.trim() !== '';
+    const safeTitleText = escapeHtml(link.title);
+    const safeTitleAttr = escapeHtml(link.title);
+
     const iconOrImage = hasImage
-      ? `<img src="${link.image}" alt="${link.title}" class="link-image">`
-      : `<i class="link-icon ${link.icon}"></i>`;
+      ? `<img src="${escapeHtml(link.image)}" alt="${safeTitleAttr}" class="link-image">`
+      : `<i class="link-icon ${escapeHtml(sanitizeIconClass(link.icon))}"></i>`;
 
     const isMastodon =
       (typeof link.title === 'string' && link.title.toLowerCase().includes('mastodon')) ||
       (typeof link.icon === 'string' && link.icon.toLowerCase().includes('mastodon')) ||
       (typeof link.url === 'string' && /^https?:\/\/[^\s]+\/@/.test(link.url));
 
-    const relAttr = isMastodon ? 'me noopener noreferrer' : 'noopener noreferrer';
+    const relAttrValue = isMastodon ? 'me noopener noreferrer' : 'noopener noreferrer';
+
+    const safeHref = escapeHtml(sanitizeHref(link.url));
+    const targetAttr = isMailOrTel(link.url) ? '' : ' target="_blank"';
+    const relAttr = isMailOrTel(link.url) ? '' : ` rel="${relAttrValue}"`;
 
     return `
-            <a href="${link.url}" class="link-item" target="_blank" rel="${relAttr}">
+            <a href="${safeHref}" class="link-item"${targetAttr}${relAttr}>
                 ${iconOrImage}
-                <span class="link-title">${link.title}</span>
+                <span class="link-title">${safeTitleText}</span>
             </a>`;
   })
   .join('\n');
@@ -92,10 +163,22 @@ if (config.profile.background.type === 'image') {
 }
 
 // Replace placeholders in template
-template = template.replace(/{{NAME}}/g, config.profile.name);
-template = template.replace(/{{BIO}}/g, config.profile.bio);
-template = template.replace(/{{AVATAR_URL}}/g, config.profile.avatar);
-template = template.replace(/{{SITE_URL}}/g, config.siteUrl);
+const nameRaw = String(config.profile.name ?? '');
+const bioRaw = String(config.profile.bio ?? '');
+const siteUrlRaw = String(config.siteUrl ?? '');
+
+template = template.replace(/{{NAME_TEXT}}/g, escapeHtml(nameRaw));
+template = template.replace(/{{NAME_ATTR}}/g, escapeHtml(nameRaw));
+template = template.replace(/{{BIO_TEXT}}/g, escapeHtml(bioRaw));
+template = template.replace(/{{BIO_ATTR}}/g, escapeHtml(bioRaw));
+template = template.replace(/{{AVATAR_URL_ATTR}}/g, escapeHtml(config.profile.avatar ?? ''));
+template = template.replace(/{{SITE_URL_ATTR}}/g, escapeHtml(siteUrlRaw));
+template = template.replace(/{{SITE_URL_JSON}}/g, JSON.stringify(siteUrlRaw));
+
+const mailtoSubject = `Check out ${nameRaw}`;
+const mailtoHref = `mailto:?subject=${encodeURIComponent(mailtoSubject)}&body=${encodeURIComponent(siteUrlRaw)}`;
+template = template.replace(/{{SHARE_EMAIL_HREF_ATTR}}/g, escapeHtml(mailtoHref));
+
 template = template.replace(/{{BACKGROUND_STYLE}}/g, backgroundStyle);
 template = template.replace(
   /{{BG_COLOR}}/g,

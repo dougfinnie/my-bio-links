@@ -4,13 +4,13 @@
     <meta charset="UTF-8" />
     <meta
       name="viewport"
-      content="width=device-width, initial-scale=1, maximum-scale=1, user-scalable=no, viewport-fit=cover"
+      content="width=device-width, initial-scale=1, viewport-fit=cover"
     />
-    <meta name="description" content="{{BIO}}" />
-    <meta property="og:title" content="{{NAME}}" />
-    <meta property="og:description" content="{{BIO}}" />
-    <meta property="og:url" content="{{SITE_URL}}" />
-    <title>{{NAME}}</title>
+    <meta name="description" content="{{BIO_ATTR}}" />
+    <meta property="og:title" content="{{NAME_ATTR}}" />
+    <meta property="og:description" content="{{BIO_ATTR}}" />
+    <meta property="og:url" content="{{SITE_URL_ATTR}}" />
+    <title>{{NAME_TEXT}}</title>
 
     <!-- Google Fonts -->
     <link rel="preconnect" href="https://fonts.googleapis.com" />
@@ -92,6 +92,15 @@
           transform: scale(0.95);
       }
 
+      /* Focus styles (keyboard) */
+      .top-bar-button:focus-visible,
+      .link-item:focus-visible,
+      .modal-close:focus-visible,
+      .share-button:focus-visible {
+          outline: 3px solid rgba(10, 11, 13, 0.9);
+          outline-offset: 3px;
+      }
+
       /* Main Container */
       .container {
           max-width: 680px;
@@ -100,6 +109,19 @@
           display: flex;
           flex-direction: column;
           align-items: center;
+      }
+
+      /* Visually-hidden utility (screen reader only) */
+      .sr-only {
+          position: absolute;
+          width: 1px;
+          height: 1px;
+          padding: 0;
+          margin: -1px;
+          overflow: hidden;
+          clip: rect(0, 0, 0, 0);
+          white-space: nowrap;
+          border: 0;
       }
 
       /* Profile Section */
@@ -360,6 +382,8 @@
           class="top-bar-button"
           onclick="openShareModal()"
           aria-label="Share profile"
+          aria-haspopup="dialog"
+          aria-controls="shareModal"
         >
           <svg
             xmlns="http://www.w3.org/2000/svg"
@@ -377,12 +401,12 @@
     </div>
 
     <!-- Main Container -->
-    <div class="container">
+    <main class="container" id="main">
       <!-- Profile Section -->
       <div class="profile">
-        <img src="{{AVATAR_URL}}" alt="{{NAME}}" class="avatar" />
-        <h1 class="profile-name">{{NAME}}</h1>
-        <p class="profile-bio">{{BIO}}</p>
+        <img src="{{AVATAR_URL_ATTR}}" alt="{{NAME_ATTR}}" class="avatar" />
+        <h1 class="profile-name">{{NAME_TEXT}}</h1>
+        <p class="profile-bio">{{BIO_TEXT}}</p>
       </div>
 
       <!-- Links -->
@@ -395,26 +419,33 @@
           <img src="qrcode.png" alt="QR Code" />
         </div>
       </div>
-    </div>
+    </main>
 
     <!-- Share Modal -->
-    <div class="modal" id="shareModal" onclick="closeShareModal(event)">
-      <div class="modal-content" onclick="event.stopPropagation()">
+    <div
+      class="modal"
+      id="shareModal"
+      role="dialog"
+      aria-modal="true"
+      aria-labelledby="shareModalTitle"
+      onclick="closeShareModal(event)"
+    >
+      <div class="modal-content" onclick="event.stopPropagation()" tabindex="-1">
         <div class="modal-header">
-          <h2 class="modal-title">Share this page</h2>
-          <button class="modal-close" onclick="closeShareModal()">
+          <h2 class="modal-title" id="shareModalTitle">Share this page</h2>
+          <button class="modal-close" type="button" aria-label="Close share dialog" onclick="closeShareModal()">
             &times;
           </button>
         </div>
         <div class="share-options">
-          <button class="share-button" onclick="copyToClipboard()">
+          <button class="share-button" type="button" onclick="copyToClipboard()">
             <i class="fas fa-link"></i>
             <span>Copy Link</span>
           </button>
+          <div id="shareStatus" class="sr-only" aria-live="polite"></div>
           <a
             class="share-button"
-            href="mailto:?subject=Check out {{NAME}}&body={{SITE_URL}}"
-            target="_blank"
+            href="{{SHARE_EMAIL_HREF_ATTR}}"
           >
             <i class="fas fa-envelope"></i>
             <span>Email</span>
@@ -424,34 +455,113 @@
     </div>
 
     <script>
+      let lastFocusedElement = null;
+
+      function isShareModalOpen() {
+        return document.getElementById('shareModal').classList.contains('active');
+      }
+
       function openShareModal() {
-        document.getElementById('shareModal').classList.add('active');
+        const modal = document.getElementById('shareModal');
+        lastFocusedElement = document.activeElement;
+        modal.classList.add('active');
+        document.body.style.overflow = 'hidden';
+
+        // Move focus into the dialog
+        const closeBtn = modal.querySelector('.modal-close');
+        if (closeBtn) closeBtn.focus();
       }
 
       function closeShareModal(event) {
-        if (!event || event.target === document.getElementById('shareModal')) {
-          document.getElementById('shareModal').classList.remove('active');
+        const modal = document.getElementById('shareModal');
+        if (!event || event.target === modal) {
+          modal.classList.remove('active');
+          document.body.style.overflow = '';
+
+          // Restore focus to the opener
+          if (lastFocusedElement && typeof lastFocusedElement.focus === 'function') {
+            lastFocusedElement.focus();
+          }
+          lastFocusedElement = null;
         }
       }
 
+      function setShareStatus(message) {
+        const el = document.getElementById('shareStatus');
+        if (!el) return;
+        el.textContent = message;
+        // Clear after a moment to allow repeated announcements
+        window.setTimeout(() => {
+          if (el.textContent === message) el.textContent = '';
+        }, 2000);
+      }
+
       function copyToClipboard() {
-        const url = '{{SITE_URL}}';
-        navigator.clipboard
-          .writeText(url)
-          .then(() => {
-            alert('Link copied to clipboard!');
-          })
-          .catch(err => {
-            console.error('Failed to copy:', err);
-          });
+        const url = {{SITE_URL_JSON}};
+        if (navigator.clipboard && navigator.clipboard.writeText) {
+          navigator.clipboard
+            .writeText(url)
+            .then(() => setShareStatus('Link copied to clipboard.'))
+            .catch(() => fallbackCopyToClipboard(url));
+        } else {
+          fallbackCopyToClipboard(url);
+        }
+      }
+
+      function fallbackCopyToClipboard(text) {
+        try {
+          const textarea = document.createElement('textarea');
+          textarea.value = text;
+          textarea.setAttribute('readonly', '');
+          textarea.style.position = 'fixed';
+          textarea.style.top = '-9999px';
+          textarea.style.left = '-9999px';
+          document.body.appendChild(textarea);
+          textarea.select();
+          document.execCommand('copy');
+          document.body.removeChild(textarea);
+          setShareStatus('Link copied to clipboard.');
+        } catch (err) {
+          console.error('Failed to copy:', err);
+          setShareStatus('Unable to copy link.');
+        }
+      }
+
+      function trapShareModalFocus(e) {
+        if (!isShareModalOpen() || e.key !== 'Tab') return;
+
+        const modal = document.getElementById('shareModal');
+        const focusables = modal.querySelectorAll(
+          'a[href], button:not([disabled]), textarea, input, select, [tabindex]:not([tabindex="-1"])'
+        );
+        if (!focusables.length) return;
+
+        const first = focusables[0];
+        const last = focusables[focusables.length - 1];
+        const active = document.activeElement;
+
+        if (e.shiftKey) {
+          if (active === first || active === modal) {
+            e.preventDefault();
+            last.focus();
+          }
+        } else {
+          if (active === last) {
+            e.preventDefault();
+            first.focus();
+          }
+        }
       }
 
       // Close modal on Escape key
       document.addEventListener('keydown', e => {
-        if (e.key === 'Escape') {
+        if (e.key === 'Escape' && isShareModalOpen()) {
           closeShareModal();
         }
       });
+
+      // Trap focus inside the modal while open
+      document.addEventListener('keydown', trapShareModalFocus);
     </script>
   </body>
 </html>
