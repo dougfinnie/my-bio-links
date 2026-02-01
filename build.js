@@ -2,7 +2,6 @@ const fs = require('fs');
 const path = require('path');
 const QRCode = require('qrcode');
 const https = require('https');
-const http = require('http');
 
 // Get config name from command line argument
 const configName = process.argv[2];
@@ -141,11 +140,15 @@ function copyDir(src, dest, allowedBaseDir) {
 // Helper function to download a file
 function downloadFile(url, destPath) {
   return new Promise((resolve, reject) => {
-    // Bunny Fonts uses HTTPS, but handle both for robustness
-    const protocol = url.startsWith('https:') ? https : http;
+    // Enforce HTTPS for security
+    if (!url.startsWith('https:')) {
+      reject(new Error(`Only HTTPS URLs are allowed: ${url}`));
+      return;
+    }
+
     const file = fs.createWriteStream(destPath);
 
-    const request = protocol.get(url, response => {
+    const request = https.get(url, response => {
       if (response.statusCode === 301 || response.statusCode === 302) {
         // Handle redirects
         file.close();
