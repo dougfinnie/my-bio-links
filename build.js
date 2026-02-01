@@ -12,8 +12,23 @@ if (!configName) {
   process.exit(1);
 }
 
+// Validate config name doesn't contain path traversal sequences or absolute paths
+if (configName.includes('..') || path.isAbsolute(configName) || path.normalize(configName) !== configName) {
+  console.error(`Error: Invalid config name '${configName}'.`);
+  process.exit(1);
+}
+
 // Build config path: config/{configName}
-const configPath = path.resolve('config', configName);
+const baseConfigDir = path.resolve('config');
+const configPath = path.resolve(baseConfigDir, configName);
+
+// Ensure resolved path is within the config directory (prevent path traversal)
+const normalizedConfigPath = path.normalize(configPath);
+const normalizedBaseDir = path.normalize(baseConfigDir);
+if (!normalizedConfigPath.startsWith(normalizedBaseDir + path.sep) && normalizedConfigPath !== normalizedBaseDir) {
+  console.error(`Error: Invalid config path.`);
+  process.exit(1);
+}
 
 // Validate config folder exists
 if (!fs.existsSync(configPath)) {
@@ -22,33 +37,92 @@ if (!fs.existsSync(configPath)) {
   process.exit(1);
 }
 
+// Helper function to validate that a path stays within a base directory
+function isPathWithinBase(targetPath, baseDir) {
+  const normalizedTarget = path.normalize(path.resolve(targetPath));
+  const normalizedBase = path.normalize(path.resolve(baseDir));
+  return normalizedTarget.startsWith(normalizedBase + path.sep) || normalizedTarget === normalizedBase;
+}
+
+// Helper function to validate file/directory name doesn't contain path traversal
+function isValidFileName(name) {
+  if (!name || name.includes('..') || path.isAbsolute(name) || path.normalize(name) !== name) {
+    return false;
+  }
+  // Reject names with path separators
+  if (name.includes(path.sep) || (path.sep !== '/' && name.includes('/'))) {
+    return false;
+  }
+  return true;
+}
+
 // Helper function to copy directory recursively
-function copyDir(src, dest) {
+function copyDir(src, dest, allowedBaseDir) {
+  // Validate src is within allowed base directory
+  if (!isPathWithinBase(src, allowedBaseDir)) {
+    throw new Error(`Path traversal detected: ${src} is outside allowed directory ${allowedBaseDir}`);
+  }
+  // Path is validated and safe to use
+  const validatedSrc = path.normalize(path.resolve(src));
+  const validatedBase = path.normalize(path.resolve(allowedBaseDir));
+  // Final check: ensure validated path stays within base
+  if (!validatedSrc.startsWith(validatedBase + path.sep) && validatedSrc !== validatedBase) {
+    throw new Error(`Path traversal detected: ${validatedSrc} is outside allowed directory ${validatedBase}`);
+  }
+
   if (!fs.existsSync(dest)) {
     fs.mkdirSync(dest, { recursive: true });
   }
 
-  const entries = fs.readdirSync(src, { withFileTypes: true });
+  const entries = fs.readdirSync(validatedSrc, { withFileTypes: true });
 
   for (const entry of entries) {
-    const srcPath = path.join(src, entry.name);
+    // Validate entry name to prevent path traversal
+    if (!isValidFileName(entry.name)) {
+      console.warn(`Skipping invalid entry name: ${entry.name}`);
+      continue;
+    }
+
+    const srcPath = path.join(validatedSrc, entry.name);
     const destPath = path.join(dest, entry.name);
 
+    // Validate resolved paths stay within allowed directories
+    if (!isPathWithinBase(srcPath, allowedBaseDir)) {
+      throw new Error(`Path traversal detected: ${srcPath} is outside allowed directory ${allowedBaseDir}`);
+    }
+    // Path is validated and safe to use
+    const validatedSrcPath = path.normalize(path.resolve(srcPath));
+    const validatedAllowedBase = path.normalize(path.resolve(allowedBaseDir));
+    // Final check: ensure validated path stays within base
+    if (!validatedSrcPath.startsWith(validatedAllowedBase + path.sep) && validatedSrcPath !== validatedAllowedBase) {
+      throw new Error(`Path traversal detected: ${validatedSrcPath} is outside allowed directory ${validatedAllowedBase}`);
+    }
+
     if (entry.isDirectory()) {
-      copyDir(srcPath, destPath);
+      copyDir(validatedSrcPath, destPath, allowedBaseDir);
     } else {
-      fs.copyFileSync(srcPath, destPath);
+      fs.copyFileSync(validatedSrcPath, destPath);
     }
   }
 }
 
 // Read configuration from config folder
+// Construct path safely: configPath is already validated to be within baseConfigDir
 const configFilePath = path.join(configPath, 'config.json');
-if (!fs.existsSync(configFilePath)) {
+// Resolve and normalize the path to prevent path traversal
+const resolvedConfigFilePath = path.normalize(path.resolve(configFilePath));
+const normalizedConfigBase = path.normalize(path.resolve(configPath));
+// Final validation: ensure resolved path stays within configPath (prevent path traversal)
+if (!resolvedConfigFilePath.startsWith(normalizedConfigBase + path.sep) && resolvedConfigFilePath !== normalizedConfigBase) {
+  console.error(`Error: Invalid config file path.`);
+  process.exit(1);
+}
+if (!fs.existsSync(resolvedConfigFilePath)) {
   console.error(`Error: config.json not found in 'config/${configName}' folder.`);
   process.exit(1);
 }
-const config = JSON.parse(fs.readFileSync(configFilePath, 'utf8'));
+// Path is validated and safe to use
+const config = JSON.parse(fs.readFileSync(resolvedConfigFilePath, 'utf8'));
 
 console.log(`Building with config folder: ${configPath}`);
 
@@ -211,8 +285,13 @@ fs.mkdirSync('dist');
 
 // Copy assets directory to dist
 const assetsPath = path.join(configPath, 'assets');
+// Validate assetsPath stays within configPath
+if (!isPathWithinBase(assetsPath, configPath)) {
+  console.error(`Error: Invalid assets path.`);
+  process.exit(1);
+}
 if (fs.existsSync(assetsPath)) {
-  copyDir(assetsPath, 'dist/assets');
+  copyDir(assetsPath, 'dist/assets', configPath);
   console.log('✓ Assets copied');
 }
 
