@@ -1,24 +1,19 @@
-import js from '@eslint/js';
-import prettier from 'eslint-config-prettier';
+// ESLint flat config - using CommonJS for compatibility
+const js = require('@eslint/js');
+const prettier = require('eslint-config-prettier');
+const globals = require('globals');
 
-export default [
+module.exports = [
   js.configs.recommended,
   prettier,
   {
     files: ['**/*.js'],
     languageOptions: {
       ecmaVersion: 2022,
-      sourceType: 'module',
+      sourceType: 'script', // CommonJS for build.js
       globals: {
-        console: 'readonly',
-        process: 'readonly',
-        Buffer: 'readonly',
-        __dirname: 'readonly',
-        __filename: 'readonly',
-        require: 'readonly',
-        module: 'readonly',
-        exports: 'readonly',
-        global: 'readonly',
+        ...globals.node,
+        ...globals.es2021,
       },
     },
     rules: {
@@ -27,14 +22,49 @@ export default [
       'prefer-const': 'error',
       'prefer-arrow-callback': 'error',
       'prefer-template': 'error',
-      'no-console': 'warn',
+      // Allow console in build scripts
+      'no-console': ['warn', { allow: ['log', 'warn', 'error'] }],
       'no-debugger': 'error',
-      'no-unused-vars': ['error', { argsIgnorePattern: '^_' }],
+      'no-unused-vars': [
+        'error',
+        {
+          argsIgnorePattern: '^_',
+          varsIgnorePattern: '^_',
+        },
+      ],
       eqeqeq: ['error', 'always'],
       curly: ['error', 'all'],
+      // Code quality rules
+      'no-eval': 'error',
+      'no-implied-eval': 'error',
+      'no-new-func': 'error',
+      'no-script-url': 'error',
+      'no-sequences': 'error',
+      'no-throw-literal': 'error',
+      'no-unmodified-loop-condition': 'error',
+      'no-unused-expressions': 'error',
+      'no-useless-call': 'error',
+      'no-useless-concat': 'error',
+      'no-useless-return': 'error',
+      'prefer-promise-reject-errors': 'error',
+      radix: 'error',
+      yoda: 'error',
     },
   },
   {
-    ignores: ['node_modules/', 'dist/', '*.min.js'],
+    files: ['build.js'],
+    rules: {
+      // Build scripts can use console more freely
+      'no-console': 'off',
+    },
+  },
+  {
+    ignores: [
+      'node_modules/',
+      'dist/',
+      '*.min.js',
+      'config/*/',
+      '!config/example/',
+    ],
   },
 ];

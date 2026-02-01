@@ -127,13 +127,15 @@ Each config directory in `config/` contains its own `config.json` file and `asse
 This project automatically adds `rel="me"` to Mastodon profile links, which enables [identity verification](https://joinmastodon.org/verification). When you link to your Mastodon profile from your site, Mastodon can verify that you own this site by checking for the `rel="me"` attribute.
 
 The build script automatically detects Mastodon links by checking:
+
 - If the link title contains "Mastodon" (case-insensitive)
-- If the icon class contains "Mastodon" (case-insensitive)  
+- If the icon class contains "Mastodon" (case-insensitive)
 - If the URL matches the Mastodon profile pattern (contains `/@`)
 
 When a Mastodon link is detected, the link will include `rel="me noopener noreferrer"` instead of just `rel="noopener noreferrer"`.
 
 **Example Mastodon link configuration:**
+
 ```json
 {
   "title": "Mastodon",
@@ -143,6 +145,7 @@ When a Mastodon link is detected, the link will include `rel="me noopener norefe
 ```
 
 After deploying your site, you can verify your identity on Mastodon:
+
 1. Add your site URL to your Mastodon profile's "Profile metadata" or "Featured links"
 2. Add `rel="me"` to the link on your Mastodon profile (or use Mastodon's built-in profile fields)
 3. Mastodon will verify the bidirectional link between your profile and your site

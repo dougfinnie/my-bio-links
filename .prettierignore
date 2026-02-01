@@ -1,16 +1,36 @@
 # Dependencies
 node_modules/
 
-# Build output
+# Build outputs
 dist/
 
 # Generated files
 *.min.js
 *.min.css
 
+# Config directories (except example)
+config/*/
+!config/example/
+
+# Package manager files
+package-lock.json
+yarn.lock
+pnpm-lock.yaml
+
 # Logs
 *.log
 
-# OS generated files
+# Cache
+.eslintcache
+.prettiercache
+
+# Git
+.git/
+
+# IDE
+.vscode/
+.idea/
+
+# OS
 .DS_Store
 Thumbs.db
