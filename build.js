@@ -2,6 +2,8 @@ const fs = require('fs');
 const path = require('path');
 const QRCode = require('qrcode');
 const { URL } = require('url');
+const https = require('https');
+const http = require('http');
 
 // Get config name from command line argument
 const configName = process.argv[2];
@@ -104,6 +106,166 @@ function copyDir(src, dest, allowedBaseDir) {
       fs.copyFileSync(validatedSrcPath, destPath);
     }
   }
+}
+
+// Helper function to download a file
+function downloadFile(url, destPath) {
+  return new Promise((resolve, reject) => {
+    // Bunny Fonts uses HTTPS, but handle both for robustness
+    const protocol = url.startsWith('https:') ? https : http;
+    const file = fs.createWriteStream(destPath);
+    
+    const request = protocol.get(url, (response) => {
+      if (response.statusCode === 301 || response.statusCode === 302) {
+        // Handle redirects
+        file.close();
+        if (fs.existsSync(destPath)) {
+          fs.unlinkSync(destPath);
+        }
+        return downloadFile(response.headers.location, destPath)
+          .then(resolve)
+          .catch(reject);
+      }
+      
+      if (response.statusCode !== 200) {
+        file.close();
+        if (fs.existsSync(destPath)) {
+          fs.unlinkSync(destPath);
+        }
+        reject(new Error(`Failed to download ${url}: ${response.statusCode}`));
+        return;
+      }
+      
+      response.pipe(file);
+      file.on('finish', () => {
+        file.close();
+        resolve();
+      });
+    });
+    
+    request.on('error', (err) => {
+      file.close();
+      if (fs.existsSync(destPath)) {
+        fs.unlinkSync(destPath);
+      }
+      reject(err);
+    });
+  });
+}
+
+// Helper function to extract font URLs from CSS
+function extractFontUrls(css) {
+  const urls = [];
+  const urlRegex = /url\(['"]?([^'")]+)['"]?\)/g;
+  let match;
+  
+  while ((match = urlRegex.exec(css)) !== null) {
+    urls.push(match[1]);
+  }
+  
+  return urls;
+}
+
+// Helper function to parse font family and weights from config
+function parseFontConfig(fontFamily) {
+  // Extract font name (remove quotes and 'sans-serif' etc)
+  const fontName = fontFamily
+    .replace(/['"]/g, '')
+    .split(',')[0]
+    .trim();
+  
+  // Default weights if not specified - Poppins typically uses 300,400,500,600,700
+  const defaultWeights = [300, 400, 500, 600, 700];
+  
+  return {
+    name: fontName,
+    weights: defaultWeights
+  };
+}
+
+// Function to download fonts from Bunny Fonts
+async function downloadFonts(fontFamily) {
+  const fontConfig = parseFontConfig(fontFamily);
+  const fontName = fontConfig.name;
+  const weights = fontConfig.weights;
+  
+  // Create fonts directory
+  const fontsDir = path.join('dist', 'assets', 'fonts');
+  if (!fs.existsSync(fontsDir)) {
+    fs.mkdirSync(fontsDir, { recursive: true });
+  }
+  
+  // Build Bunny Fonts URL - try multiple formats to get all weights
+  // Format: family=FontName:300,400,500,600,700 (comma-separated weights)
+  const weightsParam = weights.join(',');
+  const bunnyFontsUrl = `https://fonts.bunny.net/css?family=${encodeURIComponent(fontName)}:${weightsParam}&display=swap`;
+  
+  console.log(`Downloading fonts from Bunny Fonts: ${fontName}...`);
+  
+  try {
+    // Download the CSS file
+    const cssResponse = await new Promise((resolve, reject) => {
+      https.get(bunnyFontsUrl, (response) => {
+        if (response.statusCode !== 200) {
+          reject(new Error(`Failed to fetch CSS: ${response.statusCode}`));
+          return;
+        }
+        let data = '';
+        response.on('data', chunk => data += chunk);
+        response.on('end', () => resolve(data));
+      }).on('error', reject);
+    });
+    
+    // Extract font URLs from CSS
+    const fontUrls = extractFontUrls(cssResponse);
+    
+    if (fontUrls.length === 0) {
+      throw new Error('No font URLs found in CSS');
+    }
+    
+    // Download each font file
+    const fontFiles = [];
+    for (let i = 0; i < fontUrls.length; i++) {
+      const fontUrl = fontUrls[i];
+      const urlObj = new URL(fontUrl, bunnyFontsUrl);
+      const fileName = path.basename(urlObj.pathname);
+      const destPath = path.join(fontsDir, fileName);
+      
+      await downloadFile(fontUrl, destPath);
+      fontFiles.push({ url: fontUrl, localPath: `assets/fonts/${fileName}` });
+    }
+    
+    // Generate local CSS with @font-face declarations
+    const localCss = generateLocalFontCSS(cssResponse, fontFiles);
+    const cssPath = path.join('dist', 'assets', 'fonts.css');
+    fs.writeFileSync(cssPath, localCss);
+    
+    console.log(`✓ Downloaded ${fontFiles.length} font files`);
+    return cssPath;
+  } catch (error) {
+    console.error('Error downloading fonts:', error.message);
+    throw error;
+  }
+}
+
+// Function to generate local CSS with @font-face declarations
+function generateLocalFontCSS(originalCss, fontFiles) {
+  // Create a map of remote URLs to local paths
+  const urlMap = new Map();
+  fontFiles.forEach(({ url, localPath }) => {
+    urlMap.set(url, localPath);
+  });
+  
+  // Replace all font URLs with local paths
+  let localCss = originalCss;
+  fontFiles.forEach(({ url, localPath }) => {
+    // Replace both quoted and unquoted URLs
+    const escapedUrl = url.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+    const regex = new RegExp(`url\\(['"]?${escapedUrl}['"]?\\)`, 'g');
+    localCss = localCss.replace(regex, `url('${localPath}')`);
+  });
+  
+  return localCss;
 }
 
 // Read configuration from config folder
@@ -295,28 +457,40 @@ if (fs.existsSync(assetsPath)) {
   console.log('✓ Assets copied');
 }
 
-// Write the generated HTML
-fs.writeFileSync('dist/index.html', template);
-
-// Generate QR code
-QRCode.toFile(
-  'dist/qrcode.png',
-  config.siteUrl,
-  {
-    width: 200,
-    margin: 2,
-    color: {
-      dark: '#000000',
-      light: '#FFFFFF',
-    },
-  },
-  err => {
-    if (err) {
-      console.error('Error generating QR code:', err);
-    } else {
-      console.log('✓ Build complete!');
-      console.log('✓ QR code generated');
-      console.log('✓ Output directory: dist/');
-    }
+// Download fonts from Bunny Fonts and complete build
+const fontFamily = config.profile.theme.fontFamily || "'Poppins', sans-serif";
+(async () => {
+  try {
+    await downloadFonts(fontFamily);
+    
+    // Write the generated HTML
+    fs.writeFileSync('dist/index.html', template);
+    
+    // Generate QR code
+    QRCode.toFile(
+      'dist/qrcode.png',
+      config.siteUrl,
+      {
+        width: 200,
+        margin: 2,
+        color: {
+          dark: '#000000',
+          light: '#FFFFFF',
+        },
+      },
+      err => {
+        if (err) {
+          console.error('Error generating QR code:', err);
+          process.exit(1);
+        } else {
+          console.log('✓ Build complete!');
+          console.log('✓ QR code generated');
+          console.log('✓ Output directory: dist/');
+        }
+      }
+    );
+  } catch (error) {
+    console.error('Build failed:', error.message);
+    process.exit(1);
   }
-);
+})();
