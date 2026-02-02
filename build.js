@@ -264,7 +264,7 @@ async function downloadFonts(fontFamily) {
       const destPath = path.join(fontsDir, fileName);
 
       await downloadFile(fontUrl, destPath);
-      fontFiles.push({ url: fontUrl, localPath: `assets/fonts/${fileName}` });
+      fontFiles.push({ url: fontUrl, localPath: `fonts/${fileName}` });
     }
 
     // Generate local CSS with @font-face declarations
